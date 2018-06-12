@@ -101,7 +101,7 @@ def AAPIPostManage(time, timeSta, timTrans, SimStep):
             # 5. Update learning rate and discount factor
             if agents[index].learningRate >= 0.01:
                 agents[index].learningRate -= decayLearningRate
-            if agents[index].discountFactor <= 0.8:
+            if agents[index].discountFactor <= 0.9:
                 agents[index].discountFactor += incrementDiscountFactor
             if agents[index].id == 549:
                 AKIPrintString("from " + str(agents[index].state) + " to " + str(currentState) + " | with action " + str(

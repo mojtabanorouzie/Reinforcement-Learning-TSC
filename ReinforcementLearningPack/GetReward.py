@@ -1,7 +1,6 @@
 def getReward(oldDta, delayTime):
-    # Harmonic mean
-    # dta = harmonic_mean(delayTime)
-    dta = sum(delayTime)
+    # Harmonic Mean
+    dta = max(delayTime)
     hm = harmonicMean(oldDta)
     # Shift Right
     oldDta = shiftRight(oldDta)
