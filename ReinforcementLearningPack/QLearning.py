@@ -2,7 +2,7 @@ import random
 
 
 class ReinforcementLearningAgent:
-    def __init__(self, index, agentId, junctionIdSectionIn, junctionIdSectionOut, controlType, numberOfPhases,
+    def __init__(self, agentId, junctionIdSectionIn, junctionIdSectionOut, controlType, numberOfPhases,
                  numberOfAction, numberOfState, initLearningRate, initDiscountFactor):
         self.id = agentId
         self.idSectionIn = junctionIdSectionIn
@@ -16,6 +16,7 @@ class ReinforcementLearningAgent:
         self.learningRate = initLearningRate
         self.discountFactor = initDiscountFactor
         self.oldDta = [0 for i in range(5)]
+        self.counter = [0 for i in range(numberOfState)]
 
 
 def updateQTable(qValue, qValueNew, state, action, newState, newAction, reward, learningRate, discountFactor):

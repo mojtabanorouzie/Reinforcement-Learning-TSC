@@ -1,5 +1,5 @@
 from AAPI import *
-from ReinforcementLearningPack import QLearning, GetState, ActionSelection, GetReward
+from ReinforcementLearningPack import QLearning, GetState, ActionSelection, GetReward, CreateDataSet
 
 # Global Variables
 warmup = 1800
@@ -14,6 +14,7 @@ numberOfState = 24
 numberOfAction = 19
 tempTime = -1
 agents = []
+createDataSet = True
 
 
 def AAPILoad():
@@ -43,7 +44,7 @@ def AAPIInit():
         controlType = ECIGetControlType(junctionId)
         numOfPhases = ECIGetNumberPhases(junctionId)
         # Initial Agent
-        agents.append(QLearning.ReinforcementLearningAgent(index, junctionId, junctionIdSectionIn, junctionIdSectionOut,
+        agents.append(QLearning.ReinforcementLearningAgent(junctionId, junctionIdSectionIn, junctionIdSectionOut,
                                                            controlType, numOfPhases, numberOfAction, numberOfState,
                                                            initLearningRate, initDiscountFactor))
     return 0
@@ -60,24 +61,23 @@ def AAPIPostManage(time, timeSta, timTrans, SimStep):
         tempTime = int(time)
         numberOfJunctions = AKIInfNetNbJunctions()
         for index in xrange(numberOfJunctions):
-            # 1. Get feature from network
-            # 1.1 Get Long Queue
+            # 1. Get feature from network (Long Queue, Delay Time and Density)
             longQueueInSection = [0] * 4
+            delayTime = [0] * 4
+            density = [0] * 4
             if AKIIsGatheringStatistics() >= 0:
                 for i in range(4):
                     statisticalInfo = AKIEstGetParcialStatisticsSection(agents[index].idSectionIn[i], 100, 0)
                     if statisticalInfo.report == 0:
                         longQueueInSection[i] = statisticalInfo.LongQueueMax
+                        delayTime[i] = statisticalInfo.DTa
+                        density[i] = statisticalInfo.Density
                     else:
                         longQueueInSection[i] = 0
+                        delayTime[i] = 0
+                        density[i] = 0
             else:
                 AKIPrintString("Warning AKIIsGatheringStatistics")
-            # 2.2 Get Delay Time
-            delayTime = [0] * 4
-            for i in range(4):
-                statisticalInfo = AKIEstGetParcialStatisticsSection(agents[index].idSectionIn[i], 100, 0)
-                if statisticalInfo.report == 0:
-                    delayTime[i] = statisticalInfo.DTa
             # 2. Get State
             currentState = GetState.getState(longQueueInSection)
             # 3.1 Action Selection
@@ -93,20 +93,27 @@ def AAPIPostManage(time, timeSta, timTrans, SimStep):
             ECIChangeTimingPhase(agents[index].id, 7, phaseDuration[3], timeSta)
             # 4. Get Reward
             [reward, agents[index].oldDta] = GetReward.getReward(agents[index].oldDta, delayTime)
-            # Update Q-Table
+            # 5 .Create a dataset of agent experience
+            if createDataSet and actionType == "best" and CreateDataSet.check_convergence(
+                    agents[index].counter[agents[index].state], reward):
+                CreateDataSet.create_dataset(agents[index].state, agents[index].action, delayTime, density,
+                                             longQueueInSection)
+            # 6. Update Q-Table
             agents[index].qTable[agents[index].state][agents[index].action] = QLearning.updateQTable(
                 agents[index].qTable[agents[index].state][agents[index].action],
                 agents[index].qTable[currentState][currentAction], agents[index].state, agents[index].action,
                 currentState, currentAction, reward, agents[index].learningRate, agents[index].discountFactor)
-            # 5. Update learning rate and discount factor
+            # 7. Update learning rate and discount factor
             if agents[index].learningRate >= 0.01:
                 agents[index].learningRate -= decayLearningRate
             if agents[index].discountFactor <= 0.9:
                 agents[index].discountFactor += incrementDiscountFactor
             if agents[index].id == 549:
-                AKIPrintString("from " + str(agents[index].state) + " to " + str(currentState) + " | with action " + str(
-                    agents[index].action) + " | reward : " + str(reward) + " | action type : " + str(actionType))
-            # 6. Set new state and action
+                AKIPrintString(
+                    "from " + str(agents[index].state) + " to " + str(currentState) + " | with action " + str(
+                        agents[index].action) + " | reward : " + str(reward) + " | action type : " + str(actionType))
+            # 8. Set new state and action
+            agents[index].counter[agents[index].state] += 1
             agents[index].state = currentState
             agents[index].action = currentAction
     return 0
