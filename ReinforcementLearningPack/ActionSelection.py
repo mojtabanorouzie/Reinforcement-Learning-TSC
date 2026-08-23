@@ -1,7 +1,19 @@
+"""Action selection and the green-time splits the actions stand for."""
+
 import random
 
 
 def actionSelection(randomProbability, qTable, numberOfAction):
+    """Pick an action epsilon-greedily and return it with its green times.
+
+    `qTable` is the single Q-table row for the current state and
+    `randomProbability` that state's own exploration rate, which the caller
+    decays independently per state.
+
+    Returns [action, phaseDuration, actionType]. `actionType` is "best" or
+    "random"; the caller uses it both to decide whether to decay exploration
+    and to keep exploratory decisions out of the exported dataset.
+    """
     if random.random() > randomProbability:
         action = qTable.index(max(qTable))
         actionType = "best"
@@ -13,6 +25,21 @@ def actionSelection(randomProbability, qTable, numberOfAction):
 
 
 def getPhaseDuration(action):
+    """Map an action index to green times, in seconds, for the four phases.
+
+    All 19 splits total 92 s. The agent can only redistribute green time
+    between approaches, never lengthen or shorten the cycle: the remaining 8 s
+    of Main.py's 100 s cycle belong to the inter-green phases, which the
+    controller does not touch.
+
+    The splits are the rearrangements of three duration multisets:
+
+        actions 0-5    {33, 33, 13, 13}   two approaches favoured
+        actions 6-17   {33, 23, 23, 13}   one favoured, one starved
+        action  18     {23, 23, 23, 23}   uniform, the default branch below
+
+    Anything outside 0..18 also falls through to the uniform split.
+    """
     phaseDuration = [23] * 4  # Action 18
     if action == 0:
         phaseDuration = [33, 33, 13, 13]

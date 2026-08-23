@@ -1,3 +1,30 @@
+"""Aimsun API script: one tabular RL agent per signalised junction.
+
+Aimsun loads this file as an AAPI ("Aimsun API") extension and calls the
+AAPI* hooks below at fixed points in the simulation. The module is not a
+program -- it has no __main__ and cannot run standalone. It requires a
+licensed Aimsun installation, its compiled `_AAPI` extension module, and
+Python 2.7.
+
+Lifecycle, in call order:
+
+    AAPILoad        once, when the script is loaded
+    AAPIInit        once, before the simulation starts. Walks the network,
+                    resolves each junction's incoming and outgoing sections
+                    from its signal groups, and creates one
+                    ReinforcementLearningAgent per junction.
+    AAPIPostManage  every simulation step. Every `cycle` seconds after the
+                    warm-up, runs one control decision per junction, each on
+                    its own thread.
+    AAPIFinish      once, when the simulation ends
+    AAPIUnLoad      once, when the script is unloaded
+
+Each agent observes the queue lengths on its four incoming approaches,
+picks one of `numberOfAction` green-time splits, applies it to the
+junction's four green phases, and updates its Q-table from the change in
+delay time. See mainProcess for the per-decision sequence.
+"""
+
 from AAPI import *
 from ReinforcementLearningPack import QLearning, GetState, ActionSelection, GetReward, CreateDataSet
 import threading
@@ -17,8 +44,35 @@ tempTime = -1
 agents = []
 createDataSet = True
 
+# Junction whose decisions are traced to the Aimsun log. Tracing every
+# junction on every cycle floods the log, so one is singled out. The value is
+# an Aimsun junction id and is specific to the network this was run against.
+debugJunctionId = 549
+
+# Indices of the four green phases in the Aimsun signal plan. The even-numbered
+# phases in between are inter-green and are deliberately left untouched, which
+# is what keeps the cycle length fixed while the splits vary.
+greenPhases = [1, 3, 5, 7]
+
 
 def mainProcess(index, timeSta):
+    """Run one control decision for agent `index` and update its Q-table.
+
+    Called on its own thread once per control cycle. `timeSta` is Aimsun's
+    simulation time, forwarded to ECIChangeTimingPhase.
+
+    The numbered steps below match the algorithm: observe, encode a state,
+    choose and apply an action, score the previous action, optionally export
+    the experience, then apply the temporal-difference update. Note the
+    off-by-one that this ordering implies and that is intended: the reward and
+    the update are attributed to the state/action pair from the *previous*
+    cycle (agents[index].state / .action), because only now is its effect on
+    delay time observable.
+
+    Each thread reads and writes only agents[index], so agents do not race
+    against each other -- but see CreateDataSet.create_dataset, which appends
+    to one shared file from all of them.
+    """
     # 1. Get feature from network (Long Queue, Delay Time and Density)
     longQueueInSection = [0] * 4
     delayTime = [0] * 4
@@ -45,10 +99,8 @@ def mainProcess(index, timeSta):
     if agents[index].probabilityOfRandomAction[currentState] >= eGreedy and actionType == "random":
         agents[index].probabilityOfRandomAction[currentState] -= decayProbability
     # 3.2 Set green time for each phase
-    ECIChangeTimingPhase(agents[index].id, 1, phaseDuration[0], timeSta)
-    ECIChangeTimingPhase(agents[index].id, 3, phaseDuration[1], timeSta)
-    ECIChangeTimingPhase(agents[index].id, 5, phaseDuration[2], timeSta)
-    ECIChangeTimingPhase(agents[index].id, 7, phaseDuration[3], timeSta)
+    for i in range(len(greenPhases)):
+        ECIChangeTimingPhase(agents[index].id, greenPhases[i], phaseDuration[i], timeSta)
     # 4. Get Reward
     [reward, agents[index].oldDta] = GetReward.getReward(agents[index].oldDta, delayTime)
     # 5 .Create a dataset of agent experience
@@ -66,7 +118,7 @@ def mainProcess(index, timeSta):
         agents[index].learningRate -= decayLearningRate
     if agents[index].discountFactor <= 0.9:
         agents[index].discountFactor += incrementDiscountFactor
-    if agents[index].id == 549:
+    if agents[index].id == debugJunctionId:
         AKIPrintString(
             "from " + str(agents[index].state) + " to " + str(currentState) + " | with action " + str(
                 agents[index].action) + " | reward : " + str(reward) + " | action type : " + str(actionType))
@@ -82,6 +134,13 @@ def AAPILoad():
 
 
 def AAPIInit():
+    """Create one agent per junction, wired to that junction's approaches.
+
+    For each junction, every turning of every signal group is queried for its
+    (from, to) sections; the de-duplicated "from" set becomes the agent's
+    incoming approaches. mainProcess then reads statistics from the first four
+    of them, so this assumes four-approach junctions.
+    """
     AKIPrintString("Init")
     numberOfJunctions = AKIInfNetNbJunctions()
     global agents
@@ -114,6 +173,16 @@ def AAPIManage(time, timeSta, timTrans, SimStep):
 
 
 def AAPIPostManage(time, timeSta, timTrans, SimStep):
+    """Fire one control decision per junction, once per `cycle` seconds.
+
+    Aimsun calls this every simulation step, so the body is guarded three
+    ways: the step must land on a cycle boundary, must not repeat a cycle
+    already handled (Aimsun can call back more than once for the same second),
+    and must be past the `warmup` period during which the network fills up.
+
+    Junctions are then processed concurrently, one thread each, and joined
+    before returning so no decision spills into the next simulation step.
+    """
     global tempTime
     global agents
     if (int(time) % cycle == 0) and (int(time) != tempTime) and (int(time) > warmup):
