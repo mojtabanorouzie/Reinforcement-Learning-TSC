@@ -51,10 +51,15 @@ def create_dataset(state, action, dta, density, longQueue):
         9-12    maximum queue length per approach
         13      action index, the label
 
-    Columns 1-12 are the raw measurements behind the state index in column 0,
-    which is a lossy ranking of them. Keeping both is the point: a model
-    trained on the raw features is not confined to the 24-state abstraction
+    Keeping both the raw measurements and the state index is the point: a
+    model trained on columns 1-12 is not confined to the 24-state abstraction
     the agent had to use.
+
+    Note that the row straddles two control cycles. Main.py passes the
+    previous cycle's state and action for columns 0 and 13, but the
+    measurements read on the current cycle for columns 1-12 -- so column 0 is
+    not the ranking of the values beside it. Left as it is because the code
+    gives no indication of which alignment was meant; see the README.
     """
     dataset = [[0 for i in range(DATASET_COLUMNS)]]
     dataset[0][0] = state
