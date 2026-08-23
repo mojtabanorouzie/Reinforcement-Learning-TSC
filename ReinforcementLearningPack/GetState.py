@@ -1,4 +1,21 @@
+"""State encoding: rank the four approach queues into one of 24 states."""
+
+
 def getState(longQueueInSection):
+    """Map four approach queue lengths to a state index in 0..23.
+
+    The state is the *ordering* of the four queues, longest first, not their
+    magnitudes -- there are 4! = 24 orderings, hence 24 states. Two junctions
+    with very different traffic volumes but the same relative pressure across
+    approaches therefore share a state, which is what lets one agent's
+    experience mean anything to another.
+
+    `longQueueInSection` is the maximum queue length on each of the junction's
+    four incoming approaches, in the order Main.py resolved them.
+
+    Comparisons are `>=`, so ties are resolved by falling through to the first
+    branch that accepts them; equal queues everywhere yields state 0.
+    """
     state = 0
     if (longQueueInSection[0] >= longQueueInSection[1]) and \
             (longQueueInSection[1] >= longQueueInSection[2]) and (longQueueInSection[2] >= longQueueInSection[3]):
@@ -49,7 +66,7 @@ def getState(longQueueInSection):
             (longQueueInSection[1] >= longQueueInSection[0]) and (longQueueInSection[0] >= longQueueInSection[2]):
         state = 15
     elif (longQueueInSection[2] >= longQueueInSection[3]) and \
-            (longQueueInSection[3] >= longQueueInSection[0]) and (longQueueInSection[0] >= longQueueInSection[2]):
+            (longQueueInSection[3] >= longQueueInSection[0]) and (longQueueInSection[0] >= longQueueInSection[1]):
         state = 16
     elif (longQueueInSection[3] >= longQueueInSection[2]) and \
             (longQueueInSection[2] >= longQueueInSection[0]) and (longQueueInSection[0] >= longQueueInSection[1]):
