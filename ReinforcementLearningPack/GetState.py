@@ -49,7 +49,7 @@ def getState(longQueueInSection):
             (longQueueInSection[1] >= longQueueInSection[0]) and (longQueueInSection[0] >= longQueueInSection[2]):
         state = 15
     elif (longQueueInSection[2] >= longQueueInSection[3]) and \
-            (longQueueInSection[3] >= longQueueInSection[0]) and (longQueueInSection[0] >= longQueueInSection[2]):
+            (longQueueInSection[3] >= longQueueInSection[0]) and (longQueueInSection[0] >= longQueueInSection[1]):
         state = 16
     elif (longQueueInSection[3] >= longQueueInSection[2]) and \
             (longQueueInSection[2] >= longQueueInSection[0]) and (longQueueInSection[0] >= longQueueInSection[1]):
