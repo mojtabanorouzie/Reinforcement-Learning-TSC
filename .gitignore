@@ -1,0 +1,24 @@
+# Byte-compiled / cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Aimsun / native extension side of the AAPI binding
+_AAPI.pyd
+_AAPI.so
+*.dll
+
+# Output written by ReinforcementLearningPack/CreateDataSet.py
+dataset.csv
+
+# Environments
+.venv/
+venv/
+env/
+
+# Editors / OS
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db
